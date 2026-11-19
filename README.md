@@ -24,7 +24,8 @@ Plug 'vimoured/project-detect'
 
 ## Use
 
-The project is detected once, from the directory Vim starts in or above it.
+The project is detected once, from the directory Vim starts in or its parent,
+no further up.
 
 | Function | Returns |
 | --- | --- |

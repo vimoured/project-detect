@@ -142,33 +142,37 @@ function! s:found(keys) abort
   return l:parts
 endfunction
 
-function! s:find_up(name) abort
-  " Not from the current buffer: at VimEnter it can be netrw or fugitive's
-  " status window
-  let l:file = findfile(a:name, escape(getcwd(), ' ,\') . ';' . escape(s:site_packages(), ' ,\'))
-  return empty(l:file) ? '' : fnamemodify(l:file, ':p')
+" Where a project is looked for: the directory Vim started in, then its parent.
+" No further up: a file there is another project's, as the one a venv is in.
+" Not from the current buffer: at VimEnter it can be netrw or fugitive's status
+" window
+function! s:searched() abort
+  return uniq([getcwd(), fnamemodify(getcwd(), ':h')])
 endfunction
 
-" The site-packages Vim started in, or ''. The search upwards stops there: the
-" project around a venv isn't the installed package's
-function! s:site_packages() abort
-  return matchstr(getcwd(), '^.*/\%(site\|dist\)-packages\ze\%(/\|$\)')
+function! s:find_up(name) abort
+  for l:dir in s:searched()
+    if filereadable(l:dir . '/' . a:name)
+      return fnamemodify(l:dir . '/' . a:name, ':p')
+    endif
+  endfor
+  return ''
 endfunction
 
 " An installed package has no project file of its own: it's its folder in
 " site-packages
 function! s:installed_package() abort
-  let l:site = s:site_packages()
-  let l:root = empty(l:site) ? '' : matchstr(getcwd(), '^\V' . escape(l:site, '\') . '/\v[^/]+')
-  if empty(l:root)
-    return ''
-  endif
-  return {
-        \ 'name': fnamemodify(l:root, ':t'),
-        \ 'root': l:root,
-        \ 'language': 'python',
-        \ 'tests': ['test_*.py', '*_test.py'],
-        \ }
+  for l:dir in s:searched()
+    if fnamemodify(l:dir, ':h:t') =~# '^\%(site\|dist\)-packages$'
+      return {
+            \ 'name': fnamemodify(l:dir, ':t'),
+            \ 'root': l:dir,
+            \ 'language': 'python',
+            \ 'tests': ['test_*.py', '*_test.py'],
+            \ }
+    endif
+  endfor
+  return ''
 endfunction
 
 function! s:existing_dirs(root, dirs) abort
@@ -337,14 +341,12 @@ function! s:rust() abort
 endfunction
 
 function! s:vim() abort
-  let l:dir = getcwd()
-  while empty(glob(l:dir . '/plugin/*.vim', 1, 1)) && empty(glob(l:dir . '/autoload/**/*.vim', 1, 1))
-    let l:parent = fnamemodify(l:dir, ':h')
-    if l:parent ==# l:dir || l:dir ==# s:site_packages()
-      return ''
-    endif
-    let l:dir = l:parent
-  endwhile
+  let l:dirs = filter(s:searched(), '!empty(glob(v:val . "/plugin/*.vim", 1, 1))
+        \ || !empty(glob(v:val . "/autoload/**/*.vim", 1, 1))')
+  if empty(l:dirs)
+    return ''
+  endif
+  let l:dir = l:dirs[0]
   return {
         \ 'name': fnamemodify(l:dir, ':t'),
         \ 'root': l:dir,
