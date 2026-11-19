@@ -142,11 +142,37 @@ function! s:found(keys) abort
   return l:parts
 endfunction
 
+" Where a project is looked for: the directory Vim started in, then its parent.
+" No further up: a file there is another project's, as the one a venv is in.
+" Not from the current buffer: at VimEnter it can be netrw or fugitive's status
+" window
+function! s:searched() abort
+  return uniq([getcwd(), fnamemodify(getcwd(), ':h')])
+endfunction
+
 function! s:find_up(name) abort
-  " Not from the current buffer: at VimEnter it can be netrw or fugitive's
-  " status window
-  let l:file = findfile(a:name, escape(getcwd(), ' ,\') . ';')
-  return empty(l:file) ? '' : fnamemodify(l:file, ':p')
+  for l:dir in s:searched()
+    if filereadable(l:dir . '/' . a:name)
+      return fnamemodify(l:dir . '/' . a:name, ':p')
+    endif
+  endfor
+  return ''
+endfunction
+
+" An installed package has no project file of its own: it's its folder in
+" site-packages
+function! s:installed_package() abort
+  for l:dir in s:searched()
+    if fnamemodify(l:dir, ':h:t') =~# '^\%(site\|dist\)-packages$'
+      return {
+            \ 'name': fnamemodify(l:dir, ':t'),
+            \ 'root': l:dir,
+            \ 'language': 'python',
+            \ 'tests': ['test_*.py', '*_test.py'],
+            \ }
+    endif
+  endfor
+  return ''
 endfunction
 
 function! s:existing_dirs(root, dirs) abort
@@ -202,7 +228,7 @@ function! s:python() abort
     endif
   endfor
   if empty(l:file)
-    return ''
+    return s:installed_package()
   endif
   let l:root = fnamemodify(l:file, ':h')
   let l:pyproject = l:root . '/pyproject.toml'
@@ -315,14 +341,12 @@ function! s:rust() abort
 endfunction
 
 function! s:vim() abort
-  let l:dir = getcwd()
-  while empty(glob(l:dir . '/plugin/*.vim', 1, 1)) && empty(glob(l:dir . '/autoload/**/*.vim', 1, 1))
-    let l:parent = fnamemodify(l:dir, ':h')
-    if l:parent ==# l:dir
-      return ''
-    endif
-    let l:dir = l:parent
-  endwhile
+  let l:dirs = filter(s:searched(), '!empty(glob(v:val . "/plugin/*.vim", 1, 1))
+        \ || !empty(glob(v:val . "/autoload/**/*.vim", 1, 1))')
+  if empty(l:dirs)
+    return ''
+  endif
+  let l:dir = l:dirs[0]
   return {
         \ 'name': fnamemodify(l:dir, ':t'),
         \ 'root': l:dir,
