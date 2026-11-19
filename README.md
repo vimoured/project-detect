@@ -36,6 +36,9 @@ The project is detected once, from the directory Vim starts in or above it.
 | `project_detect#is_test([file])` | Whether a file is one of its part's tests. |
 
 A Python or Rust project with no name of its own is named after its directory.
+Started in an installed package (under `site-packages` or `dist-packages`), the
+package is the project, named after its folder. The project the venv is in
+isn't.
 
 Set `g:project_name` to use it in place of detecting a name. It's enough to make
 the directory a project, with tests in `tests/` or `test/`. In that project, and
